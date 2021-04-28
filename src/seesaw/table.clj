@@ -12,9 +12,11 @@
   (:use [seesaw.util :only [illegal-argument]]))
 
 (defn- normalize-column [c]
-  (cond
-    (map? c) c
-    :else {:key c :text (name c)}))
+  (conj {:text  (get c :text ((fnil name c) (:key c)))
+         :class (get c :class Object)}
+        (if (map? c)
+          (select-keys c [:key :text :class])
+          {:key c})))
 
 (defn- unpack-row-map [col-key-map row]
   (let [a (object-array (inc (count col-key-map)))]
@@ -38,7 +40,7 @@
     (vec (concat head tail))))
 
 (defn- ^javax.swing.table.DefaultTableModel proxy-table-model
-  [column-names column-key-map]
+  [column-names column-key-map column-classes]
   (let [full-values (atom [])]
     (proxy [javax.swing.table.DefaultTableModel] [(object-array column-names) 0]
       (isCellEditable [row col] false)
@@ -76,7 +78,10 @@
         (if (= -1 col)
           (swap! full-values assoc row value)
           (let [^javax.swing.table.DefaultTableModel this this]
-            (proxy-super setValueAt value row col)))))))
+            (proxy-super setValueAt value row col))))
+      (getColumnClass [^Integer c]
+        (proxy-super getColumnClass c)
+        (nth column-classes c)))))
 
 (defn- get-full-value [^javax.swing.table.TableModel model row]
   (try
@@ -99,11 +104,13 @@
 (defn table-model
   "Creates a TableModel from column and row data. Takes two options:
 
-    :columns - a list of keys, or maps. If a key, then (name key) is used
-               as the column name. If a map, it must be in the form
-               {:key key :text text} where text is used as the column name
-               and key is use to index the row data.
-               The order establishes the order of the columns in the table.
+    :columns - a list of keys, or maps. If a key, then (name key) is used as the 
+               column name. If a map, it can be in the form 
+               {:key key :text text :class class} where key is use to index the 
+               row data, text (optional) is used as the column name, and 
+               class (optional) specifies the object class of the column data
+               returned by getColumnClass. The order establishes the order of the
+               columns in the table.
 
     :rows - a sequence of maps or vectors, possibly mixed. If a map, must contain
             row data indexed by keys in :columns. Any additional keys will
@@ -113,7 +120,7 @@
   Example:
 
     (table-model :columns [:name
-                           {:key :age :text \"Age\"}]
+                           {:key :age :text \"Age\" :class java.lang.Integer}]
                  :rows [ [\"Jim\" 65]
                          {:age 75 :name \"Doris\"}])
 
@@ -127,8 +134,9 @@
   [& {:keys [columns rows] :as opts}]
   (let [norm-cols   (map normalize-column columns)
         col-names   (map :text norm-cols)
+        col-classes (map :class norm-cols)
         col-key-map (reduce (fn [m [k v]] (assoc m k v)) {} (map-indexed #(vector (:key %2) %1) norm-cols))
-        model (proxy-table-model col-names col-key-map)]
+        model (proxy-table-model col-names col-key-map col-classes)]
     (doseq [row rows]
       (.addRow model ^objects (unpack-row col-key-map row)))
     model))
@@ -143,18 +151,22 @@
 
 (defn- single-value-at
   [^javax.swing.table.TableModel model col-key-map row]
-  (let [full-row (get-full-value model row)]
-    (merge
-      full-row
-      (reduce
-        (fn [result k] (assoc result k (.getValueAt model row (col-key-map k))))
-        {}
-        (keys col-key-map)))))
+  (if (and (>= row 0) (< row (.getRowCount model)))
+    (let [full-row (get-full-value model row)]
+      (merge
+        full-row
+        (reduce
+          (fn [result k] (assoc result k (.getValueAt model row (col-key-map k))))
+          {}
+          (keys col-key-map))))
+    nil))
 
 (defn value-at
   "Retrieve one or more rows from a table or table model. target is a JTable or TableModel.
   rows is either a single integer row index, or a sequence of row indices. In the first case
   a single map of row values is returns. Otherwise, returns a sequence of maps.
+
+  If a row index is out of bounds, returns nil.
 
   Notes:
 
@@ -175,7 +187,7 @@
     ; Print values of selected rows
     (listen t :selection
       (fn [e]
-        (println (value-at t (selection {:multi? true} t)))))
+        (println (value-at t (selection t {:multi? true})))))
   See:
     (seesaw.core/table)
     (seesaw.table/table-model)
@@ -185,6 +197,7 @@
   (let [target      (to-table-model target)
         col-key-map (get-column-key-map target)]
     (cond
+      (nil? rows)     nil
       (integer? rows) (single-value-at target col-key-map rows)
       :else           (map #(single-value-at target col-key-map %) rows))))
 
@@ -216,17 +229,18 @@
           ^objects row-values  (unpack-row col-key-map value)]
       (doseq [i (range 0 (.getColumnCount target))]
         ; TODO this precludes setting a cell to nil. Do we care?
-        (when-let [v (aget row-values i)]
-          (.setValueAt target (aget row-values i) row i)))
+        (let [v (aget row-values i)]
+          (when-not (nil? v)
+            (.setValueAt target (aget row-values i) row i))))
       ; merge with current full-map value so that extra fields aren't lost.
       (.setValueAt target
                    (merge (.getValueAt target row -1)
                           (last row-values)) row -1))
     target)
   ([target row value & more]
-    (if more
-      (apply update-at! target more)
-      (update-at! target row value))))
+    (when more
+      (apply update-at! target more))
+    (update-at! target row value)))
 
 (defn insert-at!
   "Inserts one or more rows into a table. The arguments are one or more row-index/value

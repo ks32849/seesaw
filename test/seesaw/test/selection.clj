@@ -89,12 +89,17 @@
     (it "returns {:index i :title \"the title\" :content widget} for the selected tab"
       (let [a (sc/label :text "A")
             b (sc/label :text "B")
+            c-title (sc/label :text "C title")
+            c-content (sc/label :text "C content")
             tp (sc/tabbed-panel :tabs [{:title "A" :content a}
-                                      {:title "B" :content b}])]
+                                      {:title "B" :content b}
+                                       {:title c-title :content c-content} ])]
         (.setSelectedIndex tp 1)
         (expect (= {:title "B" :content b :index 1} (selection tp)))
         (.setSelectedIndex tp 0)
-        (expect (= {:title "A" :content a :index 0} (selection tp))))))
+        (expect (= {:title "A" :content a :index 0} (selection tp)))
+        (.setSelectedIndex tp 2)
+        (expect (= {:title c-title :content c-content :index 2} (selection tp))))))
 
   (testing "when given a JTable"
     (it "returns nil when no rows are selected"
@@ -102,8 +107,8 @@
     (it "returns a seq of selected model row indices when selection is non-empty"
       (let [jtable (javax.swing.JTable. 5 3)]
         (.setRowSelectionInterval jtable 1 3)
-        (= [1 2 3] (selection jtable {:multi? true}))
-        (= 1 (selection jtable))))))
+        (expect (= [1 2 3] (selection jtable {:multi? true})))
+        (expect (= 1 (selection jtable)))))))
 
 
 (describe selection!
@@ -187,7 +192,7 @@
   (testing "when given a JTabbedPane"
     (it "selects a tab by title when given a string"
       (let [tp (sc/tabbed-panel :tabs [{:title "A" :content "A"}
-                                       {:title "B" :content "B"}])] 
+                                       {:title "B" :content "B"}])]
         (expect (= 0 (.getSelectedIndex tp)))
         (selection! tp "B")
         (expect (= 1 (.getSelectedIndex tp)))))

@@ -216,8 +216,8 @@
   A macro that returns a proxied instance of the given class. This is
   used by Seesaw to construct widgets that can be fiddled with later,
   e.g. installing a paint handler, etc."
-  ([factory-class]
-    `(proxy [~factory-class seesaw.selector.Tag] []
+  ([factory-class & opts]
+    `(proxy [~factory-class seesaw.selector.Tag] [~@opts]
        (tag_name [] (.getSimpleName ~factory-class)))))
 
 
@@ -813,7 +813,7 @@
 (def ^{:private true} boolean-examples 'boolean)
 (def ^{:private true} dimension-examples [[640 :by 480] 'java.awt.Dimension])
 
-(def ^{:private true} base-resource-options [:text :foreground :background :font :icon :tip])
+(def base-resource-options [:text :foreground :background :font :icon :tip])
 
 (def default-options
   (option-map
@@ -952,7 +952,7 @@
   Examples:
 
     ; Create a panel with a label positions at (10, 10) with width 200 and height 40.
-    (xyz-panel :items [(label :text \"The Black Lodge\" :bounds [10 10 200 40]))
+    (xyz-panel :items [(label :text \"The Black Lodge\" :bounds [10 10 200 40])])
 
     ; Move a widget up 50 pixels and right 25 pixels
     (move! my-label :by [25 -50])
@@ -1228,9 +1228,12 @@
     (selection bg (select root [:#a]))
 
     ; Listen for selection changes. Note that the selection MAY BE NIL!
+    ; Also note that the event that comes through is from the selected radio button
+    ; *not the button-group itself* since the button-group is a somewhat artificial
+    ; construct. So, you'll have to ask for (selection bg) instead of (selection e) : (
     (listen bg :selection
       (fn [e]
-        (if-let [s (selection e)]
+        (if-let [s (selection bg)]
           (println \"Selected \" (text s)))))
 
   Returns an instance of javax.swing.ButtonGroup
@@ -1285,7 +1288,7 @@
     ; an alert when clicked.
     (button :text \"Next\"
             :mnemonic \\N
-            :listen [:action #(alert \"NEXT!\")])
+            :listen [:action #(alert % \"NEXT!\")])
 
   See:
     http://download.oracle.com/javase/6/docs/api/javax/swing/JButton.html
@@ -1701,6 +1704,9 @@
     (instance? javax.swing.table.TableModel v) v
     :else (apply seesaw.table/table-model v)))
 
+(defn- table-columns [^javax.swing.JTable table]
+  (-> table .getColumnModel .getColumns enumeration-seq))
+
 (def ^{:private true} auto-resize-mode-table {
   :off                javax.swing.JTable/AUTO_RESIZE_OFF
   :next-column        javax.swing.JTable/AUTO_RESIZE_NEXT_COLUMN
@@ -1720,6 +1726,11 @@
                                 (fn [^javax.swing.JTable t]
                                   (and (.getShowHorizontalLines t)
                                       (.getShowVerticalLines t))))
+      (default-option :column-widths
+                                   #(doall
+                                     (map (fn [c w] (.setWidth c w) (.setPreferredWidth c w)) (table-columns %1) %2))
+                                   #(doall
+                                     (map (fn [c] (.getWidth c)) (table-columns %1))))
       (bean-option [:show-vertical-lines? :show-vertical-lines] javax.swing.JTable boolean)
       (bean-option [:show-horizontal-lines? :show-horizontal-lines] javax.swing.JTable boolean)
       (bean-option [:fills-viewport-height? :fills-viewport-height] javax.swing.JTable boolean)
@@ -1735,10 +1746,10 @@
     :model A TableModel, or a vector. If a vector, then it is used as
            arguments to (seesaw.table/table-model).
     :show-grid? Whether to show the grid lines of the table.
-    :show-horizontal-lines? Whether to show vertical grid lines
-    :show-vertical-lines?   Whether to show horizontal grid lines
+    :show-horizontal-lines? Whether to show horizontal grid lines
+    :show-vertical-lines?   Whether to show vertical grid lines
     :fills-viewport-height?
-    :auto-reseize The behavior of columns when the table is resized. One of:
+    :auto-resize The behavior of columns when the table is resized. One of:
            :off                Do nothing to column widths
            :next-column        When a column is resized, take space from next column
            :subsequent-columns Change subsequent columns to presercve total width of table
@@ -1822,6 +1833,8 @@
     (option-map
       action-option
       (bean-option :editable? javax.swing.JComboBox boolean)
+      (bean-option :selected-item javax.swing.JComboBox)
+      (bean-option :selected-index javax.swing.JComboBox)
       (around-option model-option to-combobox-model identity "See (seesaw.core/combobox)")
       (default-option :renderer
                       #(.setRenderer ^javax.swing.JComboBox %1 (seesaw.cells/to-cell-renderer %1 %2))
@@ -1893,7 +1906,10 @@
   [v & {:keys [from to by]}]
   (cond
     ; TODO Reflection here. Don't know how to get rid of it.
-    (number? v) (javax.swing.SpinnerNumberModel. v from to (or by 1))
+    (number? v) 
+    (let [step (or by 1)] 
+      (javax.swing.SpinnerNumberModel. ^Number v ^Comparable from ^Comparable to 
+                                       ^Number step))
     (instance? java.util.Date v)
       (javax.swing.SpinnerDateModel. ^java.util.Date v
                                      from to
@@ -2614,7 +2630,7 @@
     (bean-option :minimum-size  java.awt.Window to-dimension nil
                  dimension-examples)
 
-    (bean-option :size java.awt.Window to-dimension
+    (bean-option :size java.awt.Window to-dimension nil
                  dimension-examples)
 
     (bean-option :visible? java.awt.Window boolean)
@@ -2782,7 +2798,23 @@
 
       (bean-option :undecorated? java.awt.Frame boolean)
 
-      (bean-option [:icon :icon-image] javax.swing.JFrame frame-icon-converter))))
+      (bean-option
+        [:icon :icon-image]
+        javax.swing.JFrame
+        frame-icon-converter nil
+        "The image to be displayed as the icon for this frame")
+
+      (bean-option
+        [:icons :icon-images]
+        java.awt.Window
+        (partial map frame-icon-converter) nil
+        "Sequence of images to be displayed as the icon for this frame")
+
+      (default-option
+        :listen
+        #(apply seesaw.event/listen %1 %2)
+        nil
+        ["vector of args for (seesaw.core/listen)"]))))
 
 (option-provider javax.swing.JFrame frame-options)
 
@@ -2790,16 +2822,28 @@
   "Create a JFrame. Options:
 
     :id       id of the window, used by (select).
+
     :title    the title of the window
+
     :icon     the icon of the frame (varies by platform)
+
     :width    initial width. Note that calling (pack!) will negate this setting
+
     :height   initial height. Note that calling (pack!) will negate this setting
+
     :size     initial size. Note that calling (pack!) will negate this setting
+
     :minimum-size minimum size of frame, e.g. [640 :by 480]
+
     :content  passed through (make-widget) and used as the frame's content-pane
+
     :visible?  whether frame should be initially visible (default false)
+
     :resizable? whether the frame can be resized (default true)
+
     :on-close   default close behavior. One of :exit, :hide, :dispose, :nothing
+                The default value is :hide. Note that the :window-closed event is
+                only fired for values :exit and :dispose
 
   returns the new frame.
 
@@ -2996,25 +3040,7 @@
 
 ;*******************************************************************************
 ; Alert
-(defn alert
-  "Show a simple message alert dialog. Take an optional parent component, source,
-  used for dialog placement, and a message which is passed through (resource).
-
-  Examples:
-
-    (alert \"Hello!\")
-    (alert e \"Hello!\")
-
-  See:
-    http://download.oracle.com/javase/6/docs/api/javax/swing/JOptionPane.html#showMessageDialog%28java.awt.Component,%20java.lang.Object%29
-  "
-  ([source message]
-    (JOptionPane/showMessageDialog (to-widget source) (resource message)))
-  ([message] (alert nil message)))
-
-;*******************************************************************************
-; Input
-(def ^{:private true} input-type-map {
+(def ^{:private true} message-type-map {
   :error    JOptionPane/ERROR_MESSAGE
   :info     JOptionPane/INFORMATION_MESSAGE
   :warning  JOptionPane/WARNING_MESSAGE
@@ -3022,6 +3048,60 @@
   :plain    JOptionPane/PLAIN_MESSAGE
 })
 
+(defn- alert-impl
+  "
+    showMessageDialog(Component parentComponent,
+                      Object message,
+                      String title,
+                      int messageType,
+                      Icon icon)
+  "
+  [source message {:keys [title type icon] :or {type :plain}}]
+  (let [source (to-widget source)
+        message (if (coll? message) (object-array message) (resource message))]
+    (JOptionPane/showMessageDialog ^java.awt.Component source
+                     message
+                     (resource title)
+                     (message-type-map type)
+                     (make-icon icon))))
+
+(defn alert
+  "Show a simple message alert dialog:
+
+    (alert [source] message & options)
+
+  source  - optional parent component
+  message - The message to show the user. May be a string, or list of strings, widgets, etc.
+  options - additional options
+
+  Additional options:
+
+    :title The dialog title
+    :type :warning, :error, :info, :plain, or :question
+    :icon Icon to display (Icon, URL, etc)
+
+  Examples:
+
+    (alert \"Hello!\")
+    (alert e \"Hello!\")
+
+  See:
+    http://download.oracle.com/javase/6/docs/api/javax/swing/JOptionPane.html#showMessageDialog%28java.awt.Component,%20java.lang.Object,%20java.lang.String,%20int%29
+  "
+  [& args]
+  (let [n (count args)
+        f (first args)
+        s (second args)]
+    (cond
+      (or (= n 0) (keyword? f))
+        (illegal-argument "alert requires at least one non-keyword arg")
+      (= n 1) (alert-impl nil f {})
+      (= n 2) (alert-impl f s {})
+      (keyword? s) (alert-impl nil f (drop 1 args))
+      :else (alert-impl f s (drop 2 args)))))
+
+;*******************************************************************************
+; Input
 (defrecord InputChoice [value to-string]
   Object
   (toString [this] (to-string value)))
@@ -3044,7 +3124,7 @@
         result  (JOptionPane/showInputDialog ^java.awt.Component source
                                  message
                                  (resource title)
-                                 (input-type-map type)
+                                 (message-type-map type)
                                  (make-icon icon)
                                  choices value)]
     (if (and result choices)
@@ -3116,7 +3196,6 @@
 })
 
 (def ^:private dialog-defaults {
-  :parent         nil
   :content        "Please set the :content option."
   :option-type    :default
   :type           :plain
@@ -3200,7 +3279,7 @@
                 options default-option success-fn cancel-fn no-fn]} (merge dialog-defaults opts)
         pane (JOptionPane.
               content
-              (input-type-map type)
+              (message-type-map type)
               (dialog-option-type-map option-type)
               nil                       ;icon
               (when options
@@ -3225,6 +3304,66 @@
       (if (:visible? opts)
         (show! dlg)
         dlg)))
+
+;*******************************************************************************
+; confirm
+(defn- confirm-impl
+  "
+    showConfirmDialog(Component parentComponent,
+                      Object message,
+                      String title,
+                      int optionType,
+                      int messageType,
+                      Icon icon)
+  "
+  [source message {:keys [title option-type type icon]
+                   :or {type :plain option-type :ok-cancel}}]
+  (let [source  (to-widget source)
+        message (if (coll? message) (object-array message) (resource message))
+        result  (JOptionPane/showConfirmDialog ^java.awt.Component source
+                                 message
+                                 (resource title)
+                                 (dialog-option-type-map option-type)
+                                 (message-type-map type)
+                                 (make-icon icon))]
+    (condp = result
+      JOptionPane/NO_OPTION false
+      JOptionPane/CANCEL_OPTION nil
+      true)))
+
+(defn confirm
+  "Show a confirmation dialog:
+
+    (confirm [source] message & options)
+
+  source  - optional parent component
+  message - The message to show the user. May be a string, or list of strings, widgets, etc.
+  options - additional options
+
+  Additional options:
+
+    :title       The dialog title
+    :option-type :yes-no, :yes-no-cancel, or :ok-cancel (default)
+    :type        :warning, :error, :info, :plain, or :question
+    :icon        Icon to display (Icon, URL, etc)
+
+  Returns true if the user has hit Yes or OK, false if they hit No,
+  and nil if they hit Cancel.
+
+  See:
+    http://docs.oracle.com/javase/6/docs/api/javax/swing/JOptionPane.html#showConfirmDialog%28java.awt.Component,%20java.lang.Object,%20java.lang.String,%20int,%20int%29
+  "
+  [& args]
+  (let [n (count args)
+        f (first args)
+        s (second args)]
+    (cond
+      (or (= n 0) (keyword? f))
+        (illegal-argument "confirm requires at least one non-keyword arg")
+      (= n 1)      (confirm-impl nil f {})
+      (= n 2)      (confirm-impl f s {})
+      (keyword? s) (confirm-impl nil f (drop 1 args))
+      :else        (confirm-impl f s (drop 2 args)))))
 
 
 ;*******************************************************************************
@@ -3675,4 +3814,3 @@
   "
   [target v]
   (seesaw.value/value!* (or (to-widget target) target) v))
-

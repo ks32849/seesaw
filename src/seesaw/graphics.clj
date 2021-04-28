@@ -188,7 +188,7 @@
 ;*******************************************************************************
 ; Gradients
 
-(defn- to-point2d-f [[x y]] (java.awt.geom.Point2D$Float. (float x) (float y)))
+(defn- ^java.awt.geom.Point2D$Float to-point2d-f [[x y]] (java.awt.geom.Point2D$Float. (float x) (float y)))
 (def ^{:private true} default-start [0 0])
 (def ^{:private true} default-end [1 0])
 (def ^{:private true} default-fractions [0.0 1.0])
@@ -274,8 +274,8 @@
       (float radius)
       (to-point2d-f (or focus center))
       (float-array fractions)
-      (into-array java.awt.Color (map to-color colors))
-      (cycle-map cycle)))
+      ^{:tag "[Ljava.awt.Color;"} (into-array java.awt.Color (map to-color colors))
+      ^java.awt.MultipleGradientPaint$CycleMethod (cycle-map cycle)))
 
 ;*******************************************************************************
 ; Strokes
@@ -306,7 +306,7 @@
                          (when (seq dashes) (float-array dashes))
                          dash-phase))
 
-(defn to-stroke [v]
+(defn to-stroke
   "Convert v to a stroke. As follows depending on v:
 
     nil - returns nil
@@ -314,6 +314,7 @@
 
    Throws IllegalArgumentException if it can't figure out what to do.
    "
+  [v]
   (cond
     (nil? v)    nil
     (number? v) (stroke :width v)

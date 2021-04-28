@@ -42,7 +42,8 @@
   "
   [f & {:keys [start? initial-value] :or {start? true} :as opts}]
   (let [a (action :handler (timer-handler f initial-value))
-        t (javax.swing.Timer. 1000 a)]
+        t (javax.swing.Timer. 0 a)]
+    (.setDelay t 1000)
     (apply-options t (dissoc opts :start? :initial-value))
     (when start? (.start t))
     t))

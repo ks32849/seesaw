@@ -23,8 +23,9 @@
       (expect (= "key2" (.getColumnName t 1)))))
 
   (it "should create columns from a list of maps and keys"
-    (let [t (table-model :columns [{:key :key1 :text "KEY1"} :key2])]
+    (let [t (table-model :columns [{:key :key1 :text "KEY1" :class java.lang.Integer} :key2])]
       (expect (= "KEY1" (.getColumnName t 0)))
+      (expect (= java.lang.Integer (.getColumnClass t 0)))
       (expect (= "key2" (.getColumnName t 1)))))
 
   (it "should create rows from a list of maps"
@@ -79,7 +80,21 @@
       (expect (= {"A" nil "B" nil "C" nil } (value-at t 0)))))
   (it "gets the value of a sequence of row indices as a list of maps"
     (let [t (table-model :columns [:a :b] :rows [["a0" "b0"] ["a1" "b1"]])]
-      (expect (= [{:a "a0" :b "b0" } {:a "a1" :b "b1" }] (value-at t [0 1]))))))
+      (expect (= [{:a "a0" :b "b0" } {:a "a1" :b "b1" }] (value-at t [0 1])))))
+  (it "returns nil for an out of bounds row index"
+    (let [t (table-model :columns [{:key :a :text "a"} {:key :b :text "b"}]
+                        :rows [[:a "bee" :b "cee"] [:a "tree" :b "four"]])]
+      (expect (nil? (value-at t 9)))))
+  (it "returns nil for a nil rows parameter"
+    (let [t (table-model :columns [{:key :a :text "a"} {:key :b :text "b"}]
+                        :rows [[:a "bee" :b "cee"] [:a "tree" :b "four"]])]
+      (expect (nil? (value-at t nil)))))
+  (it "survives an out-of-bounds value-at call"
+    (let [t (table-model :columns [{:key :a :text "a"} {:key :b :text "b"}]
+                        :rows [{:a "bee" :b "cee"} {:a "tree" :b "four"}])]
+      (expect (= {:a "bee" :b "cee"} (value-at t 0)))
+      (try (value-at t 9) (catch Exception e))
+      (expect (= {:a "bee" :b "cee"} (value-at t 0))))))
 
 (describe update-at!
   (it "updates a row with the same format as :rows option of (table-model)"
@@ -107,8 +122,15 @@
     (let [t (table-model :columns [:a :b] :rows [["a0" "b0"] ["a1" "b1"]])
           r (update-at! t 1 ["A1" "B1"] 0 {:a "A0" :b "B0"})]
       (expect (= t r))
-      (expect (= {:a "A0" :b "B0"} (value-at t 0))))
+      (expect (= {:a "A0" :b "B0"} (value-at t 0)))
       (expect (= {:a "A1" :b "B1"} (value-at t 1)))))
+  (it "supports `false` boolean values"
+    (let [t (table-model :columns [{:class java.lang.Boolean :key :a}]
+                         :rows [[false] [true]])
+          r (update-at! t 0 [true] 1 [false])]
+      (expect (= t r))
+      (expect (= {:a true} (value-at t 0)))
+      (expect (= {:a false} (value-at t 1))))))
 
 (describe insert-at!
   (it "inserts a row with the same format as :rows option of (table-model)"
@@ -123,7 +145,14 @@
           r (insert-at! t 1 ["A"] 3 ["B"])]
       (expect (= t r))
       (expect (= 7 (.getRowCount t)))
-      (expect (= [{:a 0} {:a "A"} {:a 1} {:a 2} {:a "B"} {:a 3} {:a 4}] (value-at t (range (.getRowCount t))))))))
+      (expect (= [{:a 0} {:a "A"} {:a 1} {:a 2} {:a "B"} {:a 3} {:a 4}] (value-at t (range (.getRowCount t)))))))
+  (it "inserts multiple rows without crashing. Issue #146"
+    (let [t (table-model :columns [:name] :rows [])
+          r (insert-at! t 0 ["A"] 0 ["B"])]
+      (expect (= t r))
+      (expect (= 2 (.getRowCount t)))
+      (expect (= [{:name "A"} {:name "B"}]
+                 (value-at t (range (.getRowCount t))))))))
 
 (describe setRowCount
   (it "can extend the number of rows in the table with nils"

@@ -2,21 +2,21 @@
 
 _Note that current development is on the *develop* branch, not master_
 
-There's now a [Google Group] (https://groups.google.com/group/seesaw-clj) for discussion and questions.
+There's now a [Google Group](https://groups.google.com/group/seesaw-clj) for discussion and questions.
 
-[Here's a brief tutorial] (https://gist.github.com/1441520) that covers some Seesaw basics. It assumes no knowledge of Swing or Java.
+[Here's a brief tutorial](https://gist.github.com/1441520) that covers some Seesaw basics. It assumes no knowledge of Swing or Java.
 
-[Here's the slides] (http://darevay.com/talks/clojurewest2012/) from a Clojure/West 2012 talk on the Seesaw. Best viewed in Chrome or Safari.
+[Here's the slides](http://darevay.com/talks/clojurewest2012/) from a Clojure/West 2012 talk on the Seesaw. Best viewed in Chrome or Safari.
 
 # Seesaw: Clojure + UI
 
-_*See [the Seesaw Wiki] (https://github.com/daveray/seesaw/wiki) and [the Seesaw API Docs] (http://daveray.github.com/seesaw/) for more detailed docs. Note that the docs in the code (use the `doc` function!) are always the most up-to-date and trustworthy.*_
+_*See [the Seesaw Wiki](https://github.com/daveray/seesaw/wiki) and [the Seesaw API Docs](http://daveray.github.com/seesaw/) for more detailed docs. Note that the docs in the code (use the `doc` function!) are always the most up-to-date and trustworthy.*_
 
 Seesaw is a library/DSL for constructing user interfaces in Clojure. It happens to be built on Swing, but please don't hold that against it.
 
 ## Features
 
-Seesaw is compatible with both Clojure 1.2 and 1.3.
+Seesaw is compatible with both Clojure 1.4, but will probably work fine with 1.3 and 1.5. Maybe even 1.2.
 
 * Swing knowledge is *not required* for many apps!
 * [Construct widgets](https://github.com/daveray/seesaw/wiki/Widgets) with simple functions, e.g. `(listbox :model (range 100))`
@@ -44,25 +44,29 @@ Install `lein` as described and then:
 
 Add Seesaw to `project.clj`
 
-    (defproject hello-seesaw "1.0.0-SNAPSHOT"
-      :description "FIXME: write"
-      :dependencies [[org.clojure/clojure "1.3.0"]
-                    [seesaw "x.y.z"]])
+```clojure
+(defproject hello-seesaw "1.0.0-SNAPSHOT"
+  :description "FIXME: write"
+  :dependencies [[org.clojure/clojure "1.4.0"]
+                [seesaw "x.y.z"]])
+```
 
 _Replace the Seesaw version with whatever the latest version tag is. See below!_
 
 Now edit the generated `src/hello_seesaw/core.clj` file:
 
-    (ns hello-seesaw.core
-      (:use seesaw.core))
+```clojure
+(ns hello-seesaw.core
+  (:use seesaw.core))
 
-    (defn -main [& args]
-      (invoke-later
-        (-> (frame :title "Hello",
-               :content "Hello, Seesaw",
-               :on-close :exit)
-         pack!
-         show!)))
+(defn -main [& args]
+  (invoke-later
+    (-> (frame :title "Hello",
+           :content "Hello, Seesaw",
+           :on-close :exit)
+     pack!
+     show!)))
+```
 
 Now run it:
 
@@ -71,10 +75,9 @@ Now run it:
 *NOTE:* Here's how you can run against the bleeding edge of Seesaw:
 
 * Clone Seesaw from github. Fork if you like. *Switch to the "develop" branch.*
-* In your Seesaw checkout, run `lein deps` to get Seesaw's dependencies
-* In your Seesaw checkout, run `lein install` to build it
+* In your Seesaw checkout, run `lein install` to build it. *Note that Seesaw uses Leiningen 2 as of 3 NOV 2012!*
 * In your project's `project.clj` file, change the Seesaw version to `X.Y.Z-SNAPSHOT` to match whatever's in Seesaw's `project.clj`.
-* Run `lein deps`
+* Run `lein deps` ... actually you can just start coding. `lein deps` is almost never necessary.
 * Move along
 
 ## Contributors
@@ -89,9 +92,12 @@ Now run it:
 * Chun-wei Kuo (Domon)
 * Vladimir Matveev (dpx-infinity)
 * Jeff Rose (rosejn)
+* Simon Lundmark (simlun)
+* Jake McCrary (jakemcc)
 
 ## License
 
-Copyright (C) 2011 Dave Ray
+Copyright (C) 2012 Dave Ray
 
 Distributed under the Eclipse Public License, the same as Clojure.
+
